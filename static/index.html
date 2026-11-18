@@ -1,0 +1,194 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RouteWise</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+:root{--navy:#1b2559;--blue:#2563eb;--red:#dc2626;--bg:#eef2fb;--card:#fff;--ink:#1e293b;--mut:#64748b;--line:#dbe3f4}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 "Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--navy);color:#fff;display:flex;align-items:center;gap:24px;padding:10px 20px;flex-wrap:wrap}
+header b{font-size:20px}header small{opacity:.7;display:block;font-size:11px}
+.tabs{margin:0 auto;display:flex;background:#fff2;border-radius:30px;padding:4px}
+.tabs button{border:0;background:none;color:#fff;padding:8px 22px;border-radius:30px;font-weight:600;cursor:pointer}
+.tabs button.on{background:var(--blue)}.tabs button.on.em{background:var(--red)}
+main{display:grid;grid-template-columns:290px 1fr 370px;gap:14px;padding:14px;max-width:1500px;margin:auto}
+@media(max-width:1100px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:14px;padding:14px;box-shadow:0 2px 10px #1b255914;margin-bottom:14px}
+h3{margin:0 0 10px;font-size:16px}#map{height:520px;border-radius:14px;z-index:0}
+.row{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:#f8faff}
+.row button{margin-left:auto;border:0;background:none;cursor:pointer;color:var(--mut)}
+.dot{width:10px;height:10px;border-radius:50%;background:#f59e0b}.dot.g{background:#16a34a}
+select{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;margin:6px 0;font:inherit}
+.go{width:100%;border:0;border-radius:10px;padding:12px;font:600 15px inherit;color:#fff;background:var(--blue);cursor:pointer;margin-top:6px}
+.go.em{background:var(--red)}.hint{color:var(--mut);font-size:12px;margin:4px 0}
+table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:6px 4px;text-align:left;border-bottom:1px solid var(--line)}
+tr.pick{background:#dbeafe;cursor:pointer}tr.clk{cursor:pointer}tr.clk:hover{background:#f1f5ff}.bar{height:5px;border-radius:3px;background:var(--blue);margin-top:3px}
+.ok{background:#dcfce7;color:#166534;border-radius:10px;padding:10px;text-align:center;font-weight:600;margin-top:10px}
+.big{display:flex;gap:16px}.big div{flex:1}.big b{font-size:22px;display:block}.big span{color:var(--mut);font-size:12px}
+.cats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.cats button{padding:9px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;font:600 13px inherit}
+.cats button.on{background:#fee2e2;border-color:var(--red);color:var(--red)}
+.fac{display:flex;justify-content:space-between;padding:8px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+.fac:hover,.fac.on{background:#fee2e2;border-color:#fecaca}
+.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.ctl button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer;font-weight:600}
+.step{background:#f1f5ff;border-left:4px solid var(--blue);padding:10px 12px;border-radius:6px;min-height:42px;margin:10px 0}
+input[type=range]{flex:1;min-width:140px}.tag{display:inline-block;background:#e0e7ff;border-radius:6px;padding:2px 8px;font-size:12px;margin-right:6px}
+.warn{color:var(--red);font-weight:600}
+.shell{display:flex;min-height:100vh}.content{flex:1;min-width:0}
+.side{width:200px;background:var(--navy);color:#fff;padding:16px 10px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh;flex-shrink:0}
+.side .logo{padding:6px 10px 18px}.side .logo small{display:block;font-size:11px;opacity:.7;margin-top:2px}
+.side button{border:0;background:none;color:#cbd5f5;text-align:left;padding:11px 12px;border-radius:10px;font:600 13.5px inherit;cursor:pointer}
+.side button.on{background:var(--blue);color:#fff}.side button:hover{background:#ffffff1a}
+.pane{max-width:900px;margin:14px auto;padding:0 14px}
+@media(max-width:800px){.shell{flex-direction:column}.side{width:auto;height:auto;position:static;flex-direction:row;flex-wrap:wrap}}
+</style></head><body><div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const{useState,useEffect,useRef,useMemo}=React;
+const G=(()=>{const x=new XMLHttpRequest();x.open("GET","/api/graph",false);x.send();return JSON.parse(x.responseText)})();
+const P=G.places,E0=G.edges,F=G.facilities,W=G.weights;
+const ICON={h:"🏥",s:"🏠",p:"📦"},CATS=[["h","🏥 Hospitals"],["s","🏠 Shelters"],["p","📦 Relief Supplies"],["l","📞 Helplines"]];
+const FL=3;
+const key=(a,b)=>a<b?a+"-"+b:b+"-"+a;
+const pathTo=(pr,t)=>{const p=[];for(let x=t;x!==undefined;x=pr[x])p.unshift(x);return p};
+const plen=p=>p.reduce((s,x,i)=>i?s+W[key(p[i-1],x)]:0,0);
+const ALG=[{k:"mst",n:"MST 2-Approximation",c:"O(n²)",g:"Guaranteed ≤ 2 × optimal (needs triangle inequality)"},{k:"nn",n:"Nearest Neighbor",c:"O(n²)",g:"Greedy, no guarantee"},{k:"bf",n:"Brute Force",c:"O(n!)",g:"Exact, only for small n",max:9},{k:"hk",n:"Held-Karp DP",c:"O(n²·2ⁿ)",g:"Exact, dynamic programming",max:13},{k:"dij",n:"Dijkstra (start → last stop)",c:"O(V²)",g:"Exact shortest path"}];
+const api=(u,b)=>fetch("/api"+u,b?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}:undefined).then(r=>r.json());
+const nm=i=>P[i][0],MINI=[3,0,2,1,14,12];
+const NAV=[["home","🏠","Home"],["explain","🧠","Dijkstra Explained"],["reroute","🚧","Before & After Rerouting"],["lab","🧪","Complexity Lab"]];
+function Side({view,setView}){return<nav className="side"><div className="logo"><b>✈ RouteWise</b><small>Plan Smart. Travel Better.</small></div>{NAV.map(([k,i,l])=><button key={k} className={view===k?"on":""} onClick={()=>setView(k)}>{i} {l}</button>)}</nav>}
+function Mini({nodes,settled=[],cur=-1,dist={},hi=[],path=[],alt=[],blocked=[]}){
+const lo=nodes.map(i=>P[i][2]),la=nodes.map(i=>P[i][1]),x0=Math.min(...lo),y1=Math.max(...la);
+const X=i=>50+(P[i][2]-x0)/(Math.max(...lo)-x0)*460,Y=i=>35+(y1-P[i][1])/(y1-Math.min(...la))*170;
+const on=(a,b,p)=>p.some((v,j)=>j&&key(p[j-1],v)===key(a,b));
+return<svg viewBox="0 0 560 260" style={{width:"100%",background:"#f8faff",borderRadius:12}}>
+{E0.filter(([a,b])=>nodes.includes(a)&&nodes.includes(b)).map(([a,b])=>{const k=key(a,b),bl=blocked.includes(k),c=bl?"#dc2626":on(a,b,alt)?"#16a34a":hi.includes(k)?"#f59e0b":on(a,b,path)?"#2563eb":"#94a3b8";
+return<g key={k}><line x1={X(a)} y1={Y(a)} x2={X(b)} y2={Y(b)} stroke={c} strokeWidth={c==="#94a3b8"?2.5:5} strokeDasharray={bl?"7 6":null}/>
+<text x={(X(a)+X(b))/2} y={(Y(a)+Y(b))/2-6} fontSize="12" fontWeight="700" textAnchor="middle" fill="#334155" stroke="#f8faff" strokeWidth="3" paintOrder="stroke">{bl?"✖ closed":W[k].toFixed(1)+" km"}</text></g>})}
+{nodes.map(i=><g key={i}><circle cx={X(i)} cy={Y(i)} r="17" fill={i===cur?"#f59e0b":settled.includes(i)?"#93c5fd":"#fff"} stroke="#1b2559" strokeWidth="2"/>
+<text x={X(i)} y={Y(i)+34} fontSize="11" textAnchor="middle" fill="#1e293b">{P[i][0]}</text>
+{dist[i]!=null&&<text x={X(i)} y={Y(i)+4} fontSize="10" fontWeight="700" textAnchor="middle">{dist[i]}</text>}</g>)}</svg>}
+const names=p=>p.map(nm).join(" → ");
+function Explain(){const[s,setS]=useState(3),[d,setD]=useState(12),[r,setR]=useState(null),[i,setI]=useState(0);
+useEffect(()=>{api("/explain",{nodes:MINI,src:s,dst:d,blocked:[]}).then(x=>{setR(x);setI(0)})},[s,d]);
+if(!r)return<div className="card">Loading…</div>;
+const st=r.steps[i],last=i===r.steps.length-1;
+return<div className="card"><h3>🧠 Why did Dijkstra choose this path?</h3>
+<div className="ctl"><div style={{flex:1}}>From<select value={s} onChange={e=>setS(+e.target.value)}>{MINI.filter(x=>x!==d).map(x=><option key={x} value={x}>{nm(x)}</option>)}</select></div><div style={{flex:1}}>To<select value={d} onChange={e=>setD(+e.target.value)}>{MINI.filter(x=>x!==s).map(x=><option key={x} value={x}>{nm(x)}</option>)}</select></div></div>
+<div className="hint">Small graph: 6 areas, 9 roads. Numbers on roads are km. Number inside a circle is the best distance found so far from the start. Blue = settled, orange = being processed.</div>
+<Mini nodes={MINI} settled={st.settled} cur={st.u} dist={st.dist} hi={st.relax.map(x=>key(st.u,x.v))} path={last?r.path:[]}/>
+<div className="ctl" style={{marginTop:10}}><button onClick={()=>setI(Math.max(0,i-1))}>◀ Back</button><button onClick={()=>setI(Math.min(r.steps.length-1,i+1))}>Next ▶</button><input type="range" min="0" max={r.steps.length-1} value={i} onChange={e=>setI(+e.target.value)}/><span>{i+1} / {r.steps.length}</span></div>
+<div className="step"><b>Step {i+1}:</b> settle <b>{nm(st.u)}</b>. It has the smallest tentative distance ({st.du} km) among unsettled areas, so no shorter route to it can exist. Now check its roads:</div>
+{st.relax.length?<table><thead><tr><th>Road</th><th>Distance via {nm(st.u)}</th><th>Current best</th><th>Decision</th></tr></thead><tbody>{st.relax.map(x=><tr key={x.v}><td>{nm(st.u)} → {nm(x.v)} ({x.w} km)</td><td>{st.du} + {x.w} = <b>{x.new}</b></td><td>{x.old==null?"∞":x.old}</td><td>{x.ok?"✅ shorter, update":"❌ keep "+x.old}</td></tr>)}</tbody></table>:<div className="hint">No unsettled neighbours.</div>}
+{last&&(r.path.length?<div className="ok">Chosen path: {names(r.path)} = {r.km} km<div style={{fontWeight:400,fontSize:12,marginTop:4}}>Every other path is longer: {r.paths.slice(1).map(p=>names(p.path)+" ("+p.km+" km)").join(" · ")||"none exists"}</div></div>:<div className="warn">No route exists.</div>)}</div>}
+function Reroute(){const S=3,D=12,[b,setB]=useState(null),[a,setA]=useState(null),[k,setK]=useState(""),[n,setN]=useState(0);
+useEffect(()=>{api("/explain",{nodes:MINI,src:S,dst:D,blocked:[]}).then(setB)},[]);
+useEffect(()=>{if(!a||!a.path.length)return;setN(0);const id=setInterval(()=>setN(x=>{if(x>=a.path.length-1){clearInterval(id);return x}return x+1}),800);return()=>clearInterval(id)},[a]);
+if(!b)return<div className="card">Loading…</div>;
+const ed=b.path.slice(1).map((v,j)=>[b.path[j],v]),kk=k||key(...ed[0]);
+const close=async()=>setA(await api("/explain",{nodes:MINI,src:S,dst:D,blocked:[kk.split("-").map(Number)]}));
+return<div className="card"><h3>🚧 Before and after a road closure: {nm(S)} → {nm(D)}</h3>
+<Mini nodes={MINI} path={b.path} alt={a?a.path.slice(0,n+1):[]} blocked={a?[kk]:[]}/>
+<div className="hint">Blue = original route. Red dashed = closed road. Green = new route, drawn one road at a time.</div>
+<div className="step"><b>Before:</b> {names(b.path)} = <b>{b.km} km</b></div>
+<div className="ctl"><select style={{flex:1}} value={kk} onChange={e=>{setK(e.target.value);setA(null)}}>{ed.map(([x,y])=><option key={key(x,y)} value={key(x,y)}>Close {nm(x)} – {nm(y)} ({W[key(x,y)].toFixed(1)} km)</option>)}</select>
+<button className="go em" style={{width:"auto",marginTop:0}} onClick={close}>🚧 Close this road</button><button onClick={()=>setA(null)}>Reopen</button></div>
+{a&&(a.path.length?<><div className="step" style={{borderColor:"#16a34a"}}><b>After:</b> {names(a.path)} = <b>{a.km} km</b> (detour +{(a.km-b.km).toFixed(2)} km, +{((a.km/b.km-1)*100).toFixed(0)}%)</div>
+<div className="hint">Dijkstra re-ran on the graph without the closed road. Other routes it compared: {a.paths.map(p=>names(p.path)+" ("+p.km+" km)").join(" · ")}</div></>:<div className="warn" style={{marginTop:10}}>No alternative route exists. This road is the only link.</div>)}</div>}
+function Chart({rows,f}){const ks=[["mst","MST 2-approx","#7c3aed"],["nn","Nearest Neighbor","#16a34a"],["bf","Brute Force","#dc2626"],["hk","Held-Karp DP","#2563eb"]];
+const v=rows.flatMap(r=>ks.map(([k])=>r[k]?.[f]).filter(x=>x>0)),lo=Math.log10(Math.min(...v))-.1,hi=Math.log10(Math.max(...v))+.1,X=n=>50+(n-3)/9*470,Y=x=>250-(Math.log10(x)-lo)/(hi-lo)*220;
+const tk=[];for(let e=Math.ceil(lo);e<=Math.floor(hi);e++)tk.push(e);
+return<svg viewBox="0 0 560 300" style={{width:"100%"}}>{tk.map(e=><g key={e}><line x1="50" x2="525" y1={Y(10**e)} y2={Y(10**e)} stroke="#e2e8f0"/><text x="44" y={Y(10**e)+4} fontSize="11" textAnchor="end">10^{e}</text></g>)}
+{rows.map(r=><text key={r.n} x={X(r.n)} y="270" fontSize="11" textAnchor="middle">{r.n}</text>)}<text x="285" y="292" fontSize="12" textAnchor="middle">number of stops (n)</text>
+{ks.map(([k,l,c],j)=>{const pts=rows.filter(r=>r[k]&&r[k][f]>0);return<g key={k}><polyline fill="none" stroke={c} strokeWidth="3" points={pts.map(r=>X(r.n)+","+Y(r[k][f])).join(" ")}/>{pts.map(r=><circle key={r.n} cx={X(r.n)} cy={Y(r[k][f])} r="3.5" fill={c}/>)}<text x={70+j*125} y="16" fontSize="12" fill={c} fontWeight="700">● {l}</text></g>})}</svg>}
+function Lab(){const[rows,setRows]=useState(null),[f,setF]=useState("ops"),[busy,setBusy]=useState(false);
+const go=()=>{setBusy(true);api("/complexity").then(r=>{setRows(r);setBusy(false)})};
+const r9=rows&&rows.find(r=>r.n===9);
+return<div className="card"><h3>🧪 Complexity Analysis Laboratory</h3>
+<div className="hint">The server runs each algorithm on the same random stops for n = 3 to 12 and counts real operations. The chart uses a log scale, so a straight line means exponential growth.</div>
+<table><thead><tr><th>Algorithm</th><th>Theory</th><th>What to expect</th></tr></thead><tbody><tr><td>MST 2-approx</td><td>O(n²)</td><td>Barely grows</td></tr><tr><td>Nearest Neighbor</td><td>O(n²)</td><td>Barely grows</td></tr><tr><td>Held-Karp DP</td><td>O(n²·2ⁿ)</td><td>Roughly doubles per extra stop</td></tr><tr><td>Brute Force</td><td>O(n!)</td><td>Explodes (stops at n = 9)</td></tr></tbody></table>
+<button className="go" onClick={go} disabled={busy}>{busy?"Running experiment…":"▶ Run experiment"}</button>
+{rows&&<><div className="ctl" style={{margin:"12px 0 4px"}}><button onClick={()=>setF("ops")} style={f==="ops"?{background:"#dbeafe"}:{}}>Operations</button><button onClick={()=>setF("ms")} style={f==="ms"?{background:"#dbeafe"}:{}}>Time (ms)</button></div>
+<Chart rows={rows} f={f}/>
+{r9&&<div className="step">At 9 stops: Brute Force needed <b>{r9.bf.ops.toLocaleString()}</b> operations, Held-Karp <b>{r9.hk.ops.toLocaleString()}</b>, MST approximation <b>{r9.mst.ops}</b>, Nearest Neighbor <b>{r9.nn.ops}</b>. Brute Force is exact but 8! = 40,320 tours; the approximations trade a little accuracy for speed.</div>}
+<table><thead><tr><th>n</th><th>MST ops</th><th>NN ops</th><th>Brute ops</th><th>Held-Karp ops</th></tr></thead><tbody>{rows.map(r=><tr key={r.n}><td>{r.n}</td><td>{r.mst.ops}</td><td>{r.nn.ops}</td><td>{r.bf?r.bf.ops.toLocaleString():"–"}</td><td>{r.hk?r.hk.ops.toLocaleString():"–"}</td></tr>)}</tbody></table></>}</div>}
+function Analysis({view}){return<div className="pane">{view==="explain"?<Explain/>:view==="reroute"?<Reroute/>:<Lab/>}</div>}
+function App(){
+const[mode,setMode]=useState("travel"),[stops,setStops]=useState([0,5,12,13,10]),[res,setRes]=useState(null),[sel,setSel]=useState("mst");
+const[fi,setFi]=useState(0),[play,setPlay]=useState(false),[blocked,setBlocked]=useState(new Set()),[flood,setFlood]=useState(true);
+const[user,setUser]=useState(2),[cat,setCat]=useState("h"),[tgt,setTgt]=useState(null);
+const[view,setView]=useState("home");const mapR=useRef(),grp=useRef();
+const post=(u,b)=>fetch("/api"+u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
+const bl=[...blocked].map(k=>k.split("-").map(Number));
+const[list,setList]=useState([]),[er,setEr]=useState(null);
+useEffect(()=>{if(cat!=="l")post("/nearest",{src:user,cat,blocked:bl,flood}).then(setList)},[user,cat,blocked,flood]);
+useEffect(()=>{if(tgt==null){setEr(null);return}post("/route",{src:user,dst:F[tgt].at,blocked:bl,flood}).then(setEr)},[user,tgt,blocked,flood]);
+const erKm=er&&er.path.length?er.km:null;
+const frames=mode==="travel"?(res?.out[sel]?.fr||[]):(er?.fr||[]);
+const last=frames.length-1,done=last>=0&&fi>=last;
+useEffect(()=>{setRes(null);setFi(0);setPlay(false)},[stops]);
+useEffect(()=>{setFi(0);setPlay(mode==="emergency"&&!!er)},[mode,er]);
+useEffect(()=>{if(!play)return;const id=setInterval(()=>setFi(f=>{if(f>=last){setPlay(false);return f}return f+1}),600);return()=>clearInterval(id)},[play,last]);
+const toggle=i=>setStops(s=>i===s[0]?s:s.includes(i)?(s.length>3?s.filter(x=>x!==i):s):[...s,i]);
+const run=async()=>{const r=await post("/tour",{stops});setRes(r);setSel("mst");setFi(0);setPlay(true)};
+useEffect(()=>{const m=L.map("map").setView([18.55,73.84],11);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(m);mapR.current=m;grp.current=L.layerGroup().addTo(m)},[]);
+const cur=res?.out[sel];
+useEffect(()=>{const g=grp.current;if(!g)return;g.clearLayers();const ll=i=>[P[i][1],P[i][2]],em=mode==="emergency";
+if(em&&flood)L.circle(ll(FL),{radius:2300,color:"#ef4444",fillColor:"#f87171",fillOpacity:.3}).bindTooltip("Flood-affected area").addTo(g);
+E0.forEach(([a,b])=>{const k=key(a,b),bl=em&&blocked.has(k);const l=L.polyline([ll(a),ll(b)],{color:bl?"#dc2626":"#94a3b8",weight:bl?5:3,dashArray:bl?"6 8":null}).addTo(g);if(em)l.bindTooltip(bl?"Closed – click to reopen":"Click to close this road").on("click",()=>setBlocked(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n}))});
+const f=frames[Math.min(fi,last)];
+if(f){(f.v||[]).forEach(v=>L.circleMarker(ll(v),{radius:11,color:"#2563eb",fillColor:"#93c5fd",fillOpacity:.7}).addTo(g));
+(f.e||[]).forEach(([u,v])=>L.polyline([ll(u),ll(v)],{color:"#f59e0b",weight:7}).addTo(g));
+const sc=i=>ll(stops[i]);(f.mst||[]).forEach(([a,b])=>L.polyline([sc(a),sc(b)],{color:"#7c3aed",weight:4,dashArray:"4 6"}).addTo(g));
+if(f.tour)L.polyline(f.tour.map(sc),{color:"#f59e0b",weight:5}).addTo(g)}
+let route=null;if(!em&&cur&&!cur.skip&&done)route=sel==="dij"?cur.path:cur.t.flatMap((x,i)=>res.paths[x][cur.t[(i+1)%cur.t.length]]);
+if(em&&er&&done)route=er.path;
+if(route&&route.length)L.polyline(route.map(ll),{color:"#1d4ed8",weight:7,opacity:.9}).addTo(g);
+P.forEach((p,i)=>{const o=stops.indexOf(i),isS=!em&&o>=0;L.circleMarker(ll(i),{radius:isS||(em&&i===user)?10:6,color:"#fff",weight:2,fillOpacity:1,fillColor:em?(i===user?"#2563eb":"#64748b"):o===0?"#16a34a":isS?"#f59e0b":"#64748b"}).bindTooltip(isS?(o?o+". ":"Start: ")+p[0]:em&&i===user?"You: "+p[0]:p[0],{permanent:isS||(em&&i===user),direction:"top"}).on("click",()=>em?setUser(i):toggle(i)).addTo(g)});
+if(em)F.forEach((x,id)=>{if(x.t===cat)L.marker(ll(x.at),{icon:L.divIcon({html:`<div style="font-size:26px;margin:-6px 0 0 8px">${ICON[x.t]}</div>`,className:"",iconSize:[30,30]})}).bindTooltip(x.n).on("click",()=>setTgt(id)).addTo(g)})
+},[mode,stops,blocked,flood,user,cat,tgt,res,sel,fi,er]);
+useEffect(()=>{setTimeout(()=>mapR.current&&mapR.current.invalidateSize(),50)},[mode,view]);
+const algs=ALG.filter(a=>a.k!=="dij"&&res?.out[a.k]&&!res.out[a.k].skip),opt=res&&(res.out.hk?.d??res.out.bf?.d),best=res&&Math.min(...algs.map(a=>res.out[a.k].d));
+const info=mode==="travel"?ALG.find(a=>a.k===sel):{n:"Dijkstra's Algorithm",c:"O(V²)",g:"Exact shortest path on non-negative weights"};
+return<div className="shell"><Side view={view} setView={setView}/><div className="content">{view!=="home"&&<Analysis view={view}/>}<div style={{display:view==="home"?"block":"none"}}><header><div><b>✈ RouteWise</b><small>Plan Smart. Travel Better. Pune network of 15 areas</small></div>
+<div className="tabs"><button className={mode==="travel"?"on":""} onClick={()=>setMode("travel")}>🧳 Travel Planner</button><button className={"em "+(mode==="emergency"?"on":"")} onClick={()=>setMode("emergency")}>⚠ Emergency Mode</button></div></header>
+<main>
+<div>{mode==="travel"?<div className="card"><h3>📍 Plan Your Journey</h3>
+{stops.map((s,i)=><div className="row" key={s}><span className={"dot "+(i?"":"g")}/>{i?i+". ":"Start: "}{P[s][0]}{i>0&&<button disabled={stops.length<=3} onClick={()=>toggle(s)}>✕</button>}</div>)}
+<select value="" onChange={e=>e.target.value!==""&&setStops([...stops,+e.target.value])}><option value="">+ Add a place…</option>{P.map((p,i)=>!stops.includes(i)&&<option key={i} value={i}>{p[0]}</option>)}</select>
+<div className="hint">You can also click places on the map. The tour returns to the start. Brute Force runs up to 9 stops, Held-Karp up to 13.</div>
+<select value={sel} onChange={e=>{setSel(e.target.value);setFi(0);setPlay(!!res)}}>{ALG.map(a=><option key={a.k} value={a.k}>{a.n}</option>)}</select>
+<button className="go" onClick={run}>▶ Optimize My Route</button></div>
+:<div className="card"><h3>⚠ Emergency Resources</h3><div className="hint">Click a place on the map to set your location: <b>{P[user][0]}</b></div>
+<div className="cats">{CATS.map(([k,l])=><button key={k} className={cat===k?"on":""} onClick={()=>{setCat(k);setTgt(null)}}>{l}</button>)}</div>
+{cat==="l"?[["112","National emergency number"],["108","Ambulance"],["101","Fire brigade"],["100","Police"]].map(([n,l])=><div className="fac" key={n}><span>{l}</span><b>{n}</b></div>)
+:list.map(f=><div key={f.id} className={"fac "+(tgt===f.id?"on":"")} onClick={()=>setTgt(f.id)}><span>{ICON[f.t]} {f.n}</span><b>{f.km==null?"No route":f.km.toFixed(1)+" km"}</b></div>)}
+{cat!=="l"&&<button className="go em" onClick={()=>setTgt(list[0]?.km!=null?list[0].id:null)}>Calculate Route to Nearest</button>}</div>}</div>
+<div><div id="map"/><div className="card" style={{marginTop:14}}><h3>🔬 Algorithm Visualizer</h3>
+<div><span className="tag">{info.n}</span><span className="tag">Time: {info.c}</span><span className="tag">{info.g}</span></div>
+<div className="step">{frames.length?frames[Math.min(fi,last)].t:mode==="travel"?"Press “Optimize My Route” to run the algorithms and watch each step on the map.":"Choose a facility or press “Calculate Route to Nearest”."}</div>
+<div className="ctl"><button onClick={()=>{setFi(0);setPlay(false)}}>⏮</button><button onClick={()=>{if(done)setFi(0);setPlay(!play)}}>{play?"⏸ Pause":"▶ Play"}</button><button onClick={()=>{setPlay(false);setFi(Math.min(fi+1,last))}}>⏭ Step</button><button onClick={()=>{setPlay(false);setFi(last)}}>⏩ Result</button>
+<input type="range" min="0" max={Math.max(last,0)} value={Math.min(fi,Math.max(last,0))} onChange={e=>{setPlay(false);setFi(+e.target.value)}}/><span>{frames.length?Math.min(fi,last)+1:0} / {frames.length}</span></div>
+<div className="hint">Blue circles = settled/visited nodes · orange = edge being relaxed or tour being built · purple dashed = MST · thick blue = final route</div></div></div>
+<div>{mode==="travel"?<>
+<div className="card"><h3>📊 Algorithm Comparison</h3>{!res?<div className="hint">Run the optimizer to compare algorithms.</div>:<>
+<table><thead><tr><th>Algorithm</th><th>km</th><th>ms</th><th>Ops</th><th>vs opt</th></tr></thead><tbody>
+{ALG.map(a=>{const r=res.out[a.k];return<tr key={a.k} className={"clk "+(sel===a.k?"pick":"")} onClick={()=>{setSel(a.k);setFi(0);setPlay(true)}}>
+<td>{r.skip?"":a.k!=="dij"&&r.d===best?"🏆 ":""}{a.n}<div style={{color:"var(--mut)",fontSize:11}}>{a.c}</div></td>
+{r.skip?<td colSpan="4" className="hint">needs ≤ {a.max} stops</td>:<><td>{r.d.toFixed(1)}<div className="bar" style={{width:(a.k==="dij"?0:r.d/Math.max(...algs.map(x=>res.out[x.k].d))*100)+"%"}}/></td><td>{r.ms.toFixed(2)}</td><td>{r.ops}</td><td>{a.k==="dij"||!opt?"–":(r.d/opt).toFixed(2)+"×"}</td></>}</tr>})}</tbody></table>
+<div className="ok">Best tour: {ALG.find(a=>a.k!=="dij"&&res.out[a.k]?.d===best).n}<div style={{fontWeight:400,fontSize:12}}>Click a row to replay it on the map. “vs opt” compares with the exact answer.</div></div></>}</div>
+{cur&&!cur.skip&&<div className="card"><h3>Selected route</h3><div className="big"><div><b>{cur.d.toFixed(1)} km</b><span>Total distance</span></div><div><b>≈ {Math.round(cur.d/30*60)} min</b><span>Est. time at 30 km/h</span></div></div>
+<div className="hint" style={{marginTop:8}}>{sel==="dij"?cur.path.map(x=>P[x][0]).join(" → "):[...cur.t,cur.t[0]].map(x=>P[stops[x]][0]).join(" → ")}</div></div>}</>
+:<>
+<div className="card"><h3>🚑 Find the Safest Route</h3>
+{er?er.path.length?<><div className="big"><div><b>{erKm.toFixed(1)} km</b><span>Distance</span></div><div><b>≈ {Math.max(1,Math.round(erKm/35*60))} min</b><span>At 35 km/h</span></div></div>
+<div className="hint" style={{marginTop:8}}>From <b>{P[user][0]}</b> to <b>{F[tgt].n}</b><br/>{er.path.map(x=>P[x][0]).join(" → ")}</div><div className="ok">Safe route found! Dijkstra visited {er.fr.filter(x=>!x.e).length} nodes, {er.ops} operations.</div></>
+:<div className="warn">No route available. Reopen a closed road.</div>:<div className="hint">Pick a hospital, shelter or supply point to see the route.</div>}</div>
+<div className="card"><h3>🚧 Road Closure Simulation</h3><div className="hint">Click any road on the map to close it. Dijkstra re-runs on the updated graph and finds an alternative.</div>
+{[...blocked].map(k=><div className="row" key={k}>⛔ {k.split("-").map(x=>P[x][0]).join(" – ")}<button onClick={()=>setBlocked(s=>{const n=new Set(s);n.delete(k);return n})}>Reopen</button></div>)}
+{!blocked.size&&<div className="hint">No roads closed.</div>}
+<label style={{display:"block",marginTop:8}}><input type="checkbox" checked={flood} onChange={e=>setFlood(e.target.checked)}/> Avoid flood-affected area (edges near Kothrud cost 3×)</label>
+{blocked.size>0&&<button className="go em" onClick={()=>setBlocked(new Set())}>Reopen all roads</button>}</div></>}</div>
+</main></div></div></div>}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script></body></html>
